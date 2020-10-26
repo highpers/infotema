@@ -52,13 +52,47 @@ INNER JOIN lotes ON lotes.id = solicitude.lote_id
 GROUP BY solicitude.company_id
 ORDER BY SUM(bonuses.amount) DESC";
 
-  
+    $csv_consulta[2]['archivo'] = 'ResumenDeOperatoriaPorLotes.csv';
+    $csv_consulta[2]['consulta'] = "SELECT DATE_FORMAT(lotes.created_at, '%M %Y') AS 'Mes de creación de lote'
+, DATE_FORMAT(lotes.created_at, '%e-%m') AS 'Fecha de creación'
+, COUNT(bonuses.id) AS 'Cantidad de expedientes'
+, SUM(solicitude.fractions) AS 'Cantidad de fracciones'
+, FORMAT(SUM(bonuses.amount), 2, 'de_DE') AS 'Monto pagado en bonos F e I+D'
+, SUM(IF(STRCMP(solicitude.tiene_bono_i_mas_d, 'EVALUADO') = 0, 1, 0)) AS 'Cantidad de Bonos I+D'
+, COUNT(tabla_a.bon_id) AS 'Cantidad de expedientes de empresas A'
+, FORMAT(IFNULL(SUM(tabla_a.monto), 0), 2, 'de_DE') AS 'Monto total pagado a empresas A'
+, COUNT(tabla_b.bon_id) AS 'cantidad de expedientes de empresas B'
+, FORMAT(IFNULL(SUM(tabla_b.monto), 0), 2, 'de_DE') AS 'Monto total pagado a empresas B'
+FROM `solicitude` 
+INNER JOIN lotes ON lotes.id = solicitude.lote_id
+INNER JOIN bonuses ON bonuses.solicitude_id = solicitude.id
+LEFT JOIN (SELECT bonuses.id AS 'bon_id'
+, bonuses.amount AS 'monto'
+FROM `solicitude` 
+INNER JOIN bonuses ON bonuses.solicitude_id = solicitude.id
+WHERE solicitude.category = 'B') AS tabla_b ON tabla_b.bon_id = bonuses.id
+LEFT JOIN (SELECT bonuses.id AS 'bon_id'
+, bonuses.amount AS 'monto'
+FROM `solicitude` 
+INNER JOIN bonuses ON bonuses.solicitude_id = solicitude.id
+WHERE solicitude.category = 'A') AS tabla_a ON tabla_a.bon_id = bonuses.id
+WHERE 1 = 1
+#AND EXTRACT(YEAR_MONTH FROM STR_TO_DATE(lotes.created_at, '%Y-%m-%d')) = 202004
+GROUP BY lotes.id
+ORDER BY lotes.created_at ASC";
 
-    $csv_consulta[2]['archivo'] = '3.csv';
-    $csv_consulta[2]['consulta'] = 'SELECT ';
-
-    $csv_consulta[3]['archivo'] = '4.csv';
-    $csv_consulta[3]['consulta'] = 'SELECT ';
+    $csv_consulta[3]['archivo'] = 'MontosPorCuit.csv';
+    $csv_consulta[3]['consulta'] = "SELECT companies.cuit AS 'CUIT'
+, COUNT(bonuses.id) AS 'Cantidad de bonos pagados'
+, FORMAT(SUM(bonuses.amount), 2, 'de_DE') AS 'Monto total pagado'
+, SUM(IF(STRCMP(solicitude.tiene_bono_i_mas_d, 'EVALUADO') = 0, 1, 0)) AS 'Cantidad de Bonos I+D'
+FROM companies
+INNER JOIN solicitude ON companies.id = solicitude.company_id
+INNER JOIN bonuses ON solicitude.id = bonuses.solicitude_id
+INNER JOIN lotes ON lotes.id = solicitude.lote_id
+#WHERE YEAR(lotes.created_at) = 2020
+GROUP BY solicitude.company_id
+ORDER BY companies.cuit ASC";
 
     return $csv_consulta;
 }
@@ -70,7 +104,6 @@ function get_datos_csv($sql)
     global $db;
     // muestraArrayUobjeto($sql , __FILE__ , __LINE__ , 1 , 0);
     $ds = $db->get_results($sql, ARRAY_A);
-
     return $ds;
 }
 
@@ -78,12 +111,12 @@ function get_datos_csv($sql)
 
 function generar_csv($file, $dataset)
 {
-
-   $fp = @fopen(DIR_CSV.$file, 'w');
+    $file = DIR_CSV . $file ; 
+   $fp = fopen($file, 'w');
    if(!$fp){
      return false;
    } 
-    muestraArrayUobjeto($dataset , __FILE__ , __LINE__ , 1 , 0);
+    // muestraArrayUobjeto($dataset , __FILE__ , __LINE__ , 1 , 0);
     
     // genero la línea de títulos de columna
     $encabezados = array();
